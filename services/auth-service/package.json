@@ -1,0 +1,15 @@
+{
+  "name": "auth-service",
+  "version": "1.0.0",
+  "main": "src/app.js",
+  "scripts": {
+    "start": "node src/app.js",
+    "dev": "nodemon src/app.js"
+  },
+  "dependencies": {
+    "express", "jsonwebtoken", "bcryptjs", "pg", "sequelize", "dotenv", "cors"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.0"
+  }
+}
