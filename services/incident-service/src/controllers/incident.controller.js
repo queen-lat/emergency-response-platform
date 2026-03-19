@@ -15,42 +15,51 @@ const haversineKm = (lat1, lon1, lat2, lon2) => {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 };
 
-// ── Map incident type to responder type ──────────────────────────────────
-const getResponderType = (incidentType) => {
-  const type = incidentType.toLowerCase();
-  if (['fire', 'explosion', 'gas leak'].includes(type)) return 'fire';
-  if (['medical emergency', 'accident', 'injury'].includes(type)) return 'ambulance';
-  return 'police'; // default: robbery, crime, assault, theft, etc.
-};
-
-// ── Generate incident ID ──────────────────────────────────────────────────
 const generateIncidentId = () => {
   const year = new Date().getFullYear();
   const num = Math.floor(1000 + Math.random() * 9000);
   return `INC-${year}-${num}`;
 };
 
+// ── Generate incident ID ──────────────────────────────────────────────────
+const getResponderType = (incidentType) => {
+  const type = incidentType.toLowerCase();
+  if (['fire', 'explosion', 'gas leak'].includes(type)) return 'fire';
+  if (['medical emergency', 'accident', 'injury'].includes(type)) return 'ambulance';
+  return 'police';
+};
 // ── Find nearest available unit from dispatch service ────────────────────
 const findNearestUnit = async (latitude, longitude, unitType) => {
   try {
     const dispatchUrl = process.env.DISPATCH_SERVICE_URL || 'http://localhost:3003';
+    console.log(`Calling dispatch service: ${dispatchUrl}/vehicles?status=available&type=${unitType}`);
+    
+    // Generate a service-to-service token
+    const jwt = require('jsonwebtoken');
+    const serviceToken = jwt.sign(
+      { userId: 'incident-service', email: 'service@internal', role: 'system_admin' },
+      process.env.JWT_SECRET,
+      { expiresIn: '1m' }
+    );
+
     const response = await axios.get(`${dispatchUrl}/vehicles`, {
       params: { status: 'available', type: unitType },
+      headers: { Authorization: `Bearer ${serviceToken}` },
     });
 
+    console.log(`Vehicles found: ${response.data.length}`);
     const vehicles = response.data;
     if (!vehicles || vehicles.length === 0) return null;
 
-    // Calculate distance for each vehicle and sort by nearest
     const withDistance = vehicles.map((v) => ({
       ...v,
-      distanceKm: haversineKm(latitude, longitude, v.latitude, v.longitude),
+      distanceKm: haversineKm(latitude, longitude, parseFloat(v.latitude), parseFloat(v.longitude)),
     }));
 
     withDistance.sort((a, b) => a.distanceKm - b.distanceKm);
-    return withDistance[0]; // nearest available unit
+    return withDistance[0];
   } catch (error) {
-    console.warn('Could not reach dispatch service:', error.message);
+    console.error('Dispatch service error:', error.message);
     return null;
   }
 };
@@ -81,7 +90,8 @@ const createIncident = async (req, res) => {
     });
 
     // Try to find and assign nearest unit
-    const nearestUnit = await findNearestUnit(latitude, longitude, responderType);
+    const vehicleTypeMap = { fire: 'fire_truck', police: 'police_car', ambulance: 'ambulance' };
+const nearestUnit = await findNearestUnit(latitude, longitude, vehicleTypeMap[responderType]);
 
     if (nearestUnit) {
       await incident.update({
