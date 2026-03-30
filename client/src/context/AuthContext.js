@@ -17,12 +17,13 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const login = async (email, password) => {
-    const res = await authAPI.post('/auth/login', { email, password });
-    localStorage.setItem('token', res.data.accessToken);
-    localStorage.setItem('user', JSON.stringify(res.data.user));
-    setUser(res.data.user);
-    return res.data.user;
-  };
+  const res = await authAPI.post('/auth/login', { email, password });
+  localStorage.setItem('token', res.data.accessToken);
+  localStorage.setItem('refreshToken', res.data.refreshToken);
+  localStorage.setItem('user', JSON.stringify(res.data.user));
+  setUser(res.data.user);
+  return res.data.user;
+};
 
   const logout = () => {
     localStorage.removeItem('token');

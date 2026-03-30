@@ -5,10 +5,12 @@ import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Incidents from './pages/Incidents';
 import NewIncident from './pages/NewIncident';
+import Hospitals from './pages/Hospitals';
 import Tracking from './pages/Tracking';
 import Analytics from './pages/Analytics';
 import Navbar from './components/Navbar';
 import 'leaflet/dist/leaflet.css';
+
 
 const ProtectedRoute = ({ children }) => {
   const { user, loading } = useAuth();
@@ -34,6 +36,7 @@ function App() {
           <Route path="/incidents/new" element={<ProtectedRoute><Layout><NewIncident /></Layout></ProtectedRoute>} />
           <Route path="/tracking" element={<ProtectedRoute><Layout><Tracking /></Layout></ProtectedRoute>} />
           <Route path="/analytics" element={<ProtectedRoute><Layout><Analytics /></Layout></ProtectedRoute>} />
+          <Route path="/hospitals" element={<ProtectedRoute><Layout><Hospitals /></Layout></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
       </BrowserRouter>

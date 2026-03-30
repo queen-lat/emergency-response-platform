@@ -11,12 +11,16 @@ const roleIncidentTypes = {
   system_admin:   null,
 };
 
-const roleLabels = {
-  hospital_admin: 'Medical',
-  police_admin: 'Police',
-  fire_admin: 'Fire',
-  system_admin: 'All',
-};
+function formatStatus(status) {
+  return status?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function getTypeChip(type) {
+  const t = type?.toLowerCase();
+  if (['fire','explosion','gas leak'].includes(t)) return <span className="type-chip fire">🔥 {type}</span>;
+  if (['medical emergency','accident','injury'].includes(t)) return <span className="type-chip ambulance">🏥 {type}</span>;
+  return <span className="type-chip police">🚔 {type}</span>;
+}
 
 export default function Incidents() {
   const { user } = useAuth();
@@ -26,7 +30,6 @@ export default function Incidents() {
   const [updating, setUpdating] = useState(null);
 
   const allowedTypes = roleIncidentTypes[user?.role];
-  const roleLabel = roleLabels[user?.role] || 'All';
 
   const fetchIncidents = async () => {
     setLoading(true);
@@ -34,11 +37,7 @@ export default function Incidents() {
       const url = filter === 'open' ? '/incidents/open' : '/incidents';
       const res = await incidentAPI.get(url);
       let data = res.data;
-
-      // Filter by role
-      if (allowedTypes) {
-        data = data.filter(i => allowedTypes.includes(i.incident_type.toLowerCase()));
-      }
+      if (allowedTypes) data = data.filter(i => allowedTypes.includes(i.incident_type.toLowerCase()));
       setIncidents(data);
     } catch (err) {
       console.error(err.message);
@@ -63,44 +62,29 @@ export default function Incidents() {
 
   return (
     <div>
-      <div className="top-bar">
+      <div className="page-header">
         <div>
-          <h1 className="page-title">
-            {roleLabel === 'All' ? 'Incidents & Dispatch Status' : `${roleLabel} Incidents`}
-          </h1>
-          {allowedTypes && (
-            <p style={{ color: '#888', fontSize: 13, marginTop: -12, marginBottom: 16 }}>
-              Filtered to show only {roleLabel.toLowerCase()} incidents
-            </p>
-          )}
+          <h1 className="page-title">Incidents & Dispatch Status</h1>
+          <p className="page-subtitle">
+            {allowedTypes ? `Showing only ${user?.role?.replace('_', ' ')} incidents` : 'All emergency incidents'}
+          </p>
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
-          <button className="btn btn-secondary" onClick={fetchIncidents}>
-            <FiRefreshCw /> Refresh
-          </button>
+          <button className="btn btn-secondary" onClick={fetchIncidents}><FiRefreshCw size={14} /> Refresh</button>
           {user?.role === 'system_admin' && (
-            <Link to="/incidents/new" className="btn btn-primary">
-              <FiPlus /> New Incident
-            </Link>
+            <Link to="/incidents/new" className="btn btn-primary"><FiPlus size={14} /> New Incident</Link>
           )}
         </div>
       </div>
 
       <div className="card">
-        <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
-          {['all', 'open'].map(f => (
-            <button
-              key={f}
-              className={`btn ${filter === f ? 'btn-primary' : 'btn-secondary'}`}
-              onClick={() => setFilter(f)}
-            >
-              {f === 'all' ? 'All Incidents' : 'Open Incidents'}
-            </button>
-          ))}
+        <div className="filter-tabs">
+          <button className={`filter-tab ${filter === 'all' ? 'active' : ''}`} onClick={() => setFilter('all')}>All Incidents</button>
+          <button className={`filter-tab ${filter === 'open' ? 'active' : ''}`} onClick={() => setFilter('open')}>Open Only</button>
         </div>
 
         {loading ? (
-          <div style={{ textAlign: 'center', padding: 40, color: '#888' }}>Loading incidents...</div>
+          <div className="loading" style={{ height: 200 }}>Loading incidents...</div>
         ) : (
           <div className="table-wrap">
             <table>
@@ -108,30 +92,41 @@ export default function Incidents() {
                 <tr>
                   <th>Incident ID</th><th>Citizen</th><th>Type</th>
                   <th>Location</th><th>Status</th><th>Assigned Unit</th>
-                  <th>Reported</th><th>Actions</th>
+                  <th>Reported</th><th>Update Status</th>
                 </tr>
               </thead>
               <tbody>
                 {incidents.length === 0 ? (
-                  <tr><td colSpan="8" style={{ textAlign: 'center', color: '#888', padding: 30 }}>No incidents found</td></tr>
+                  <tr>
+                    <td colSpan="8">
+                      <div className="empty-state">
+                        <div className="empty-state-icon">📋</div>
+                        <p>No incidents found</p>
+                      </div>
+                    </td>
+                  </tr>
                 ) : incidents.map(inc => (
                   <tr key={inc.incident_id}>
-                    <td><strong>{inc.incident_id}</strong></td>
+                    <td><span className="incident-id">{inc.incident_id}</span></td>
                     <td>
-                      <div>{inc.citizen_name}</div>
-                      <div style={{ fontSize: 12, color: '#888' }}>{inc.citizen_phone}</div>
+                      <div style={{ fontWeight: 600, color: '#1A252F' }}>{inc.citizen_name}</div>
+                      <div style={{ fontSize: 12, color: '#aaa' }}>{inc.citizen_phone}</div>
                     </td>
-                    <td style={{ textTransform: 'capitalize' }}>{inc.incident_type}</td>
-                    <td style={{ fontSize: 12 }}>
+                    <td>{getTypeChip(inc.incident_type)}</td>
+                    <td style={{ fontSize: 12, color: '#888' }}>
                       {parseFloat(inc.latitude).toFixed(4)}, {parseFloat(inc.longitude).toFixed(4)}
                     </td>
-                    <td><span className={`badge badge-${inc.status}`}>{inc.status}</span></td>
-                    <td>{inc.assigned_unit_id || '—'}</td>
-                    <td style={{ fontSize: 12 }}>{new Date(inc.created_at).toLocaleString()}</td>
+                    <td><span className={`badge badge-${inc.status}`}>{formatStatus(inc.status)}</span></td>
+                    <td>
+                      {inc.assigned_unit_id
+                        ? <span style={{ fontWeight: 600, color: '#1A252F' }}>{inc.assigned_unit_id}</span>
+                        : <span style={{ color: '#ccc' }}>Not assigned</span>}
+                    </td>
+                    <td style={{ fontSize: 12, color: '#888' }}>{new Date(inc.created_at).toLocaleString()}</td>
                     <td>
                       {inc.status !== 'resolved' ? (
                         <select
-                          style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid #ddd', fontSize: 12 }}
+                          style={{ padding: '6px 10px', borderRadius: 8, border: '1.5px solid #e8e8e8', fontSize: 12, background: '#fafafa', cursor: 'pointer' }}
                           value={inc.status}
                           disabled={updating === inc.incident_id}
                           onChange={(e) => updateStatus(inc.incident_id, e.target.value)}
@@ -142,7 +137,7 @@ export default function Incidents() {
                           <option value="resolved">Resolved</option>
                         </select>
                       ) : (
-                        <span style={{ color: '#888', fontSize: 12 }}>Closed</span>
+                        <span style={{ color: '#bbb', fontSize: 12, fontStyle: 'italic' }}>Closed</span>
                       )}
                     </td>
                   </tr>

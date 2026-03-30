@@ -1,16 +1,26 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { incidentAPI, dispatchAPI, analyticsAPI } from '../api/axios';
-import { FiAlertCircle, FiTruck, FiCheckCircle, FiClock } from 'react-icons/fi';
+import { incidentAPI, dispatchAPI } from '../api/axios';
+import { FiAlertCircle, FiTruck, FiCheckCircle, FiClock, FiPlus, FiActivity } from 'react-icons/fi';
 import { useAuth } from '../context/AuthContext';
 
-// Map role to incident type and vehicle type filters
 const roleFilters = {
   hospital_admin: { incidentTypes: ['medical emergency', 'accident', 'injury'], vehicleType: 'ambulance', label: 'Medical' },
   police_admin:   { incidentTypes: ['robbery', 'assault', 'theft', 'crime'],    vehicleType: 'police_car', label: 'Police' },
   fire_admin:     { incidentTypes: ['fire', 'explosion', 'gas leak'],            vehicleType: 'fire_truck', label: 'Fire' },
   system_admin:   { incidentTypes: null, vehicleType: null, label: 'All' },
 };
+
+function formatStatus(status) {
+  return status?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function getTypeChip(type) {
+  const t = type?.toLowerCase();
+  if (['fire','explosion','gas leak'].includes(t)) return <span className="type-chip fire">🔥 {type}</span>;
+  if (['medical emergency','accident','injury'].includes(t)) return <span className="type-chip ambulance">🏥 {type}</span>;
+  return <span className="type-chip police">🚔 {type}</span>;
+}
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -24,22 +34,24 @@ export default function Dashboard() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [summaryRes, vehiclesRes, incidentsRes] = await Promise.all([
-          analyticsAPI.get('/analytics/incidents/summary'),
+        const [vehiclesRes, incidentsRes] = await Promise.all([
           dispatchAPI.get('/vehicles', { params: filter.vehicleType ? { type: filter.vehicleType } : {} }),
           incidentAPI.get('/incidents'),
         ]);
-        setSummary(summaryRes.data);
 
-        // Filter vehicles by role
-        setVehicles(vehiclesRes.data);
-
-        // Filter incidents by role
         let incidents = incidentsRes.data;
         if (filter.incidentTypes) {
           incidents = incidents.filter(i => filter.incidentTypes.includes(i.incident_type.toLowerCase()));
         }
-        setRecentIncidents(incidents.slice(0, 5));
+
+        const total = incidents.length;
+        const resolved = incidents.filter(i => i.status === 'resolved').length;
+        const dispatched = incidents.filter(i => i.status === 'dispatched').length;
+        const pending = incidents.filter(i => i.status !== 'resolved').length;
+
+        setSummary({ total, dispatched, resolved, pending });
+        setVehicles(vehiclesRes.data);
+        setRecentIncidents(incidents.slice(0, 6));
       } catch (err) {
         console.error('Dashboard error:', err.message);
       } finally {
@@ -55,76 +67,92 @@ export default function Dashboard() {
 
   return (
     <div>
-      <div className="top-bar">
+      <div className="page-header">
         <div>
-          <h1 className="page-title">Dashboard</h1>
-          {user?.role !== 'system_admin' && (
-            <p style={{ color: '#888', fontSize: 13, marginTop: -12, marginBottom: 16 }}>
-              Showing {filter.label} service data for your role
-            </p>
-          )}
+          <h1 className="page-title">
+            {filter.label === 'All' ? 'Operations Dashboard' : `${filter.label} Operations`}
+          </h1>
+          <p className="page-subtitle">
+            {filter.label === 'All'
+              ? 'Real-time overview of all emergency operations'
+              : `Showing ${filter.label.toLowerCase()} service data for your role`}
+          </p>
         </div>
         {user?.role === 'system_admin' && (
           <Link to="/incidents/new" className="btn btn-primary">
-            <FiAlertCircle /> New Incident
+            <FiPlus size={16} /> Record Incident
           </Link>
         )}
       </div>
 
       <div className="stats-grid">
         <div className="stat-card">
+          <div className="stat-icon"><FiActivity size={20} /></div>
           <span className="stat-label">Total Incidents</span>
           <span className="stat-value">{summary.total}</span>
-          <FiAlertCircle size={20} color="#888" />
+          <span className="stat-trend">All time</span>
         </div>
         <div className="stat-card amber">
-          <span className="stat-label">Pending</span>
+          <div className="stat-icon"><FiClock size={20} /></div>
+          <span className="stat-label">Active / Pending</span>
           <span className="stat-value">{summary.pending}</span>
-          <FiClock size={20} color="#d35400" />
+          <span className="stat-trend">Requires attention</span>
         </div>
         <div className="stat-card blue">
+          <div className="stat-icon"><FiTruck size={20} /></div>
           <span className="stat-label">Dispatched</span>
           <span className="stat-value">{summary.dispatched}</span>
-          <FiTruck size={20} color="#2980b9" />
+          <span className="stat-trend">Units en route</span>
         </div>
         <div className="stat-card green">
+          <div className="stat-icon"><FiCheckCircle size={20} /></div>
           <span className="stat-label">Resolved</span>
           <span className="stat-value">{summary.resolved}</span>
-          <FiCheckCircle size={20} color="#0F6E56" />
+          <span className="stat-trend">Successfully closed</span>
         </div>
         <div className="stat-card green">
-          <span className="stat-label">{filter.label} Vehicles Available</span>
+          <div className="stat-icon"><FiTruck size={20} /></div>
+          <span className="stat-label">
+            {filter.label === 'All' ? 'Available Vehicles' : `${filter.label} Vehicles Available`}
+          </span>
           <span className="stat-value">{availableVehicles}</span>
-          <FiTruck size={20} color="#0F6E56" />
+          <span className="stat-trend">Ready to dispatch</span>
         </div>
       </div>
 
       <div className="card">
-        <div className="top-bar">
-          <h2 className="card-title">
+        <div className="card-header">
+          <h2 className="card-title" style={{ marginBottom: 0 }}>
             {filter.label === 'All' ? 'Recent Incidents' : `Recent ${filter.label} Incidents`}
           </h2>
-          <Link to="/incidents" className="btn btn-secondary">View All</Link>
+          <Link to="/incidents" className="btn btn-secondary btn-icon">View All →</Link>
         </div>
         <div className="table-wrap">
           <table>
             <thead>
               <tr>
-                <th>ID</th><th>Citizen</th><th>Type</th>
-                <th>Status</th><th>Assigned Unit</th><th>Time</th>
+                <th>Incident ID</th><th>Citizen</th><th>Type</th>
+                <th>Status</th><th>Assigned Unit</th><th>Reported</th>
               </tr>
             </thead>
             <tbody>
               {recentIncidents.length === 0 ? (
-                <tr><td colSpan="6" style={{ textAlign: 'center', color: '#888' }}>No incidents yet</td></tr>
+                <tr><td colSpan="6" className="table-empty">No incidents recorded yet</td></tr>
               ) : recentIncidents.map(inc => (
                 <tr key={inc.incident_id}>
-                  <td><strong>{inc.incident_id}</strong></td>
-                  <td>{inc.citizen_name}</td>
-                  <td style={{ textTransform: 'capitalize' }}>{inc.incident_type}</td>
-                  <td><span className={`badge badge-${inc.status}`}>{inc.status}</span></td>
-                  <td>{inc.assigned_unit_id || '—'}</td>
-                  <td>{new Date(inc.created_at).toLocaleString()}</td>
+                  <td><span className="incident-id">{inc.incident_id}</span></td>
+                  <td>
+                    <div style={{ fontWeight: 600, color: '#1A252F' }}>{inc.citizen_name}</div>
+                    <div style={{ fontSize: 12, color: '#aaa' }}>{inc.citizen_phone}</div>
+                  </td>
+                  <td>{getTypeChip(inc.incident_type)}</td>
+                  <td><span className={`badge badge-${inc.status}`}>{formatStatus(inc.status)}</span></td>
+                  <td>
+                    {inc.assigned_unit_id
+                      ? <span style={{ fontWeight: 600, color: '#1A252F' }}>{inc.assigned_unit_id}</span>
+                      : <span style={{ color: '#ccc' }}>—</span>}
+                  </td>
+                  <td style={{ fontSize: 12, color: '#888' }}>{new Date(inc.created_at).toLocaleString()}</td>
                 </tr>
               ))}
             </tbody>
@@ -134,23 +162,24 @@ export default function Dashboard() {
 
       <div className="card">
         <h2 className="card-title">
-          {filter.label === 'All' ? 'Vehicle Fleet Status' : `${filter.label} Fleet Status`}
+          {filter.label === 'All' ? 'Fleet Status' : `${filter.label} Fleet`}
         </h2>
         <div className="table-wrap">
           <table>
             <thead>
-              <tr><th>Vehicle ID</th><th>Type</th><th>Station</th><th>Status</th><th>Last Updated</th></tr>
+              <tr><th>Vehicle ID</th><th>Type</th><th>Station</th><th>Status</th><th>Incident</th><th>Last Updated</th></tr>
             </thead>
             <tbody>
               {vehicles.length === 0 ? (
-                <tr><td colSpan="5" style={{ textAlign: 'center', color: '#888' }}>No vehicles registered</td></tr>
+                <tr><td colSpan="6" className="table-empty">No vehicles registered</td></tr>
               ) : vehicles.map(v => (
                 <tr key={v.vehicle_id}>
-                  <td><strong>{v.vehicle_id}</strong></td>
+                  <td><span className="incident-id">{v.vehicle_id}</span></td>
                   <td style={{ textTransform: 'capitalize' }}>{v.vehicle_type?.replace('_', ' ')}</td>
                   <td>{v.station_id}</td>
-                  <td><span className={`badge badge-${v.status}`}>{v.status}</span></td>
-                  <td>{new Date(v.last_updated).toLocaleString()}</td>
+                  <td><span className={`badge badge-${v.status}`}>{formatStatus(v.status)}</span></td>
+                  <td>{v.incident_id ? <span style={{ fontWeight: 600 }}>{v.incident_id}</span> : <span style={{ color: '#ccc' }}>—</span>}</td>
+                  <td style={{ fontSize: 12, color: '#888' }}>{new Date(v.last_updated).toLocaleString()}</td>
                 </tr>
               ))}
             </tbody>

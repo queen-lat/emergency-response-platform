@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { FiShield, FiMail, FiLock } from 'react-icons/fi';
+import { FiShield, FiMail, FiLock, FiAlertCircle } from 'react-icons/fi';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -19,7 +19,7 @@ export default function Login() {
       await login(email, password);
       navigate('/');
     } catch (err) {
-      setError(err.response?.data?.message || 'Login failed. Check your credentials.');
+      setError(err.response?.data?.message || 'Invalid email or password. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -29,26 +29,33 @@ export default function Login() {
     <div className="login-page">
       <div className="login-card">
         <div className="login-logo">
-          <FiShield size={40} color="#1D9E75" />
+          <div className="login-logo-icon">
+            <FiShield size={30} color="#fff" />
+          </div>
           <h1>Emergency Response Platform</h1>
-          <p>National Dispatch Coordination System</p>
+          <p>National Dispatch Coordination System — Ghana</p>
         </div>
 
-        {error && <div className="error-msg">{error}</div>}
+        {error && (
+          <div className="error-msg">
+            <FiAlertCircle size={16} />
+            {error}
+          </div>
+        )}
 
         <form onSubmit={handleSubmit}>
           <div className="form-group">
-            <label><FiMail size={13} /> &nbsp;Email Address</label>
+            <label>Email Address</label>
             <input
               type="email"
-              placeholder="Enter your email"
+              placeholder="Enter your official email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
             />
           </div>
           <div className="form-group">
-            <label><FiLock size={13} /> &nbsp;Password</label>
+            <label>Password</label>
             <input
               type="password"
               placeholder="Enter your password"
@@ -60,12 +67,16 @@ export default function Login() {
           <button
             type="submit"
             className="btn btn-primary"
-            style={{ width: '100%', justifyContent: 'center', padding: '12px' }}
+            style={{ width: '100%', justifyContent: 'center', padding: '13px', fontSize: 15, marginTop: 8 }}
             disabled={loading}
           >
-            {loading ? 'Signing in...' : 'Sign In'}
+            {loading ? 'Signing in...' : 'Sign In to Dashboard'}
           </button>
         </form>
+
+        <p style={{ textAlign: 'center', fontSize: 12, color: '#bbb', marginTop: 24 }}>
+          Authorized personnel only. Unauthorized access is prohibited.
+        </p>
       </div>
     </div>
   );
