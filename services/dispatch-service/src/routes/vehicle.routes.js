@@ -7,28 +7,20 @@ const {
 } = require('../controllers/vehicle.controller');
 const { verifyToken, requireRole } = require('../middleware/auth.middleware');
 
-// Register vehicle — hospital/police/fire admins
-router.post('/vehicles/register', verifyToken, requireRole(['hospital_admin', 'police_admin', 'fire_admin', 'system_admin']), registerVehicle);
+const allAdmins = ['system_admin', 'hospital_admin', 'police_admin', 'fire_admin', 'ambulance_driver'];
 
-// Get all vehicles — system admin
-router.get('/vehicles', verifyToken, getAllVehicles);
+router.use(verifyToken);
 
-// Get specific vehicle
-router.get('/vehicles/:id', verifyToken, getVehicleById);
+// Read routes — all roles
+router.get('/vehicles', requireRole(allAdmins), getAllVehicles);
+router.get('/vehicles/:id', requireRole(allAdmins), getVehicleById);
+router.get('/vehicles/:id/location', requireRole(allAdmins), getVehicleLocation);
+router.get('/vehicles/:id/history', requireRole(allAdmins), getLocationHistory);
+router.get('/dispatch/:incidentId/track', requireRole(allAdmins), trackIncident);
 
-// Get vehicle location
-router.get('/vehicles/:id/location', verifyToken, getVehicleLocation);
-
-// Push GPS update — ambulance driver or admin
-router.post('/vehicles/:id/location', verifyToken, updateLocation);
-
-// Update vehicle status
-router.put('/vehicles/:id/status', verifyToken, requireRole(['hospital_admin', 'police_admin', 'fire_admin', 'system_admin']), updateVehicleStatus);
-
-// Get location history
-router.get('/vehicles/:id/history', verifyToken, getLocationHistory);
-
-// Track incident
-router.get('/dispatch/:incidentId/track', verifyToken, trackIncident);
+// Write routes
+router.post('/vehicles/register', requireRole(['system_admin', 'hospital_admin', 'police_admin', 'fire_admin']), registerVehicle);
+router.post('/vehicles/:id/location', requireRole(allAdmins), updateLocation);
+router.put('/vehicles/:id/status', requireRole(['system_admin', 'hospital_admin', 'police_admin', 'fire_admin']), updateVehicleStatus);
 
 module.exports = router;

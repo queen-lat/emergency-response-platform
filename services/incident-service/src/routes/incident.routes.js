@@ -1,24 +1,24 @@
 const express = require('express');
 const router = express.Router();
 const {
-  createIncident,
-  getAllIncidents,
-  getOpenIncidents,
-  getIncidentById,
-  updateStatus,
-  assignUnit,
+  createIncident, getAllIncidents, getOpenIncidents,
+  getIncidentById, updateStatus, assignUnit,
 } = require('../controllers/incident.controller');
 const { verifyToken, requireRole } = require('../middleware/auth.middleware');
 
-// All incident routes require a valid JWT and system_admin role
-router.use(verifyToken);
-router.use(requireRole('system_admin'));
+const allAdmins = ['system_admin', 'hospital_admin', 'police_admin', 'fire_admin', 'ambulance_driver'];
 
-router.post('/', createIncident);
-router.get('/', getAllIncidents);
-router.get('/open', getOpenIncidents);
-router.get('/:id', getIncidentById);
-router.put('/:id/status', updateStatus);
-router.put('/:id/assign', assignUnit);
+// All routes require a valid JWT
+router.use(verifyToken);
+
+// Read routes — all admin roles can read
+router.get('/', requireRole(allAdmins), getAllIncidents);
+router.get('/open', requireRole(allAdmins), getOpenIncidents);
+router.get('/:id', requireRole(allAdmins), getIncidentById);
+
+// Write routes — only system_admin can create/modify
+router.post('/', requireRole('system_admin'), createIncident);
+router.put('/:id/status', requireRole(allAdmins), updateStatus);
+router.put('/:id/assign', requireRole('system_admin'), assignUnit);
 
 module.exports = router;

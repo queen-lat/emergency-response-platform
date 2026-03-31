@@ -43,6 +43,66 @@ io.on('connection', (socket) => {
 
 const PORT = process.env.PORT || 3003;
 
+// Simulate vehicle moving towards incident location
+const simulateVehicleMovement = async (vehicleId, targetLat, targetLng) => {
+  const Vehicle = require('./models/vehicle.model');
+  const vehicle = await Vehicle.findByPk(vehicleId);
+  if (!vehicle) return;
+
+  let currentLat = parseFloat(vehicle.latitude);
+  let currentLng = parseFloat(vehicle.longitude);
+  const steps = 10; // number of steps to reach destination
+  let step = 0;
+
+  const interval = setInterval(async () => {
+    step++;
+    // Move a fraction closer each step
+    currentLat = currentLat + (targetLat - currentLat) * 0.3;
+    currentLng = currentLng + (targetLng - currentLng) * 0.3;
+    const speed = Math.floor(60 + Math.random() * 40);
+
+    await Vehicle.update(
+      { latitude: currentLat, longitude: currentLng, speed_kmh: speed, last_updated: new Date() },
+      { where: { vehicle_id: vehicleId } }
+    );
+
+    // Broadcast via WebSocket
+    if (io) {
+      io.emit('location_update', {
+        vehicleId,
+        latitude: currentLat,
+        longitude: currentLng,
+        speed_kmh: speed,
+        timestamp: new Date(),
+      });
+    }
+
+    // Stop when close enough or steps exceeded
+    const distance = Math.sqrt(
+      Math.pow(currentLat - targetLat, 2) + Math.pow(currentLng - targetLng, 2)
+    );
+
+    if (step >= steps || distance < 0.0001) {
+      clearInterval(interval);
+      // Vehicle has arrived — update to on_scene
+      await Vehicle.update(
+        { latitude: targetLat, longitude: targetLng, speed_kmh: 0, status: 'on_scene' },
+        { where: { vehicle_id: vehicleId } }
+      );
+      if (io) {
+        io.emit('location_update', {
+          vehicleId, latitude: targetLat, longitude: targetLng,
+          speed_kmh: 0, status: 'on_scene', timestamp: new Date(),
+        });
+      }
+      console.log(`Vehicle ${vehicleId} arrived at incident location`);
+    }
+  }, 2000); // move every 2 seconds
+};
+
+// Export so it can be called from outside
+global.simulateVehicleMovement = simulateVehicleMovement;
+
 const start = async () => {
   await connectDB();
   const channel = await connectQueue();
@@ -50,20 +110,26 @@ const start = async () => {
   // Subscribe to incident.created — update vehicle status to dispatched
   if (channel) {
     await subscribeToEvent('incident.created', async (event) => {
-      try {
-        const Vehicle = require('./models/vehicle.model');
-        const { assignedUnitId, incidentId } = event.payload;
-        if (assignedUnitId) {
-          await Vehicle.update(
-            { status: 'dispatched', incident_id: incidentId },
-            { where: { vehicle_id: assignedUnitId } }
-          );
-          console.log(`Vehicle ${assignedUnitId} marked as dispatched for incident ${incidentId}`);
-        }
-      } catch (err) {
-        console.error('Error handling incident.created:', err.message);
+  try {
+    const Vehicle = require('./models/vehicle.model');
+    const { assignedUnitId, incidentId, latitude, longitude } = event.payload;
+    if (assignedUnitId) {
+      await Vehicle.update(
+        { status: 'dispatched', incident_id: incidentId },
+        { where: { vehicle_id: assignedUnitId } }
+      );
+      console.log(`Vehicle ${assignedUnitId} dispatched for incident ${incidentId}`);
+
+      // Start GPS simulation — move vehicle towards incident
+      if (latitude && longitude) {
+        console.log(`Simulating movement of ${assignedUnitId} to ${latitude}, ${longitude}`);
+        simulateVehicleMovement(assignedUnitId, parseFloat(latitude), parseFloat(longitude));
       }
-    });
+    }
+  } catch (err) {
+    console.error('Error handling incident.created:', err.message);
+  }
+});
   }
 
   server.listen(PORT, () => {
